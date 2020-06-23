@@ -96,13 +96,33 @@ static void skeleton_daemon()
 
 int main()
 {
+	int duty_cycle_00 = 0;
+	int duty_cycle_01 = 0;
+
     skeleton_daemon();
 
     syslog (LOG_NOTICE, "rdECOMd started.");
 
-    while (1)
+    wiringPiSetupPhys();                  // use the physical pin numbers
+    pinMode(PWM0, PWM_OUTPUT);            // use the RPi PWM output
+	pinMode(PWM1, PWM_OUTPUT);            // only on recent RPis
+
+// Setting PWM frequency to be 10kHz with a full range of 128 steps
+// PWM frequency = 19.2 MHz / (divisor * range)
+// 10000 = 19200000 / (divisor * 128) => divisor = 15.0 = 15
+	pwmSetMode(PWM_MODE_MS);              // use a fixed frequency
+	pwmSetRange(128);                     // range is 0-128
+	pwmSetClock(15);                      // gives a precise 10kHz signal
+	syslog (LOG_NOTICE, "The PWM Output is enabled.");
+
+	while (1)
     {
         //TODO: Insert daemon code here.
+		pwmWrite(PWM0, duty_cycle_00);                   // duty cycle of 25% (32/128)
+		pwmWrite(PWM1, duty_cycle_01);                   // duty cycle of 50% (64/128)
+		usleep(1000000L);
+    	duty_cycle_00 = duty_cycle_00 < 100 ? ++duty_cycle_00 : 0;
+    	duty_cycle_01 = duty_cycle_01 < 100 ? ++duty_cycle_01 : 0;
     }
 
 /*    syslog (LOG_NOTICE, "rdECOMd terminated."); */
