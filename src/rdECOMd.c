@@ -25,6 +25,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <syslog.h>
+#include <wiringPi.h>
+#include <softPwm.h>
+
+#define PWM0       12                    // this is physical pin 12
+#define PWM1       33                    // only on the RPi B+/A+/2
 
 static void skeleton_daemon()
 {
@@ -86,22 +91,21 @@ static void skeleton_daemon()
     }
 
     /* Open the log file */
-    openlog ("firstdaemon", LOG_PID, LOG_DAEMON);
+    openlog ("rdECOMd", LOG_PID, LOG_DAEMON);
 }
 
 int main()
 {
     skeleton_daemon();
 
+    syslog (LOG_NOTICE, "rdECOMd started.");
+
     while (1)
     {
         //TODO: Insert daemon code here.
-        syslog (LOG_NOTICE, "First daemon started.");
-/*        sleep (20); */
-        break;
     }
 
-    syslog (LOG_NOTICE, "First daemon terminated.");
+/*    syslog (LOG_NOTICE, "rdECOMd terminated."); */
     closelog();
 
     return EXIT_SUCCESS;
