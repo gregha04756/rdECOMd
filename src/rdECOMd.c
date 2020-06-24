@@ -252,7 +252,7 @@ enum State_Values Entry_state_fn(int * serialfd)
 // PWM frequency = 19.2 MHz / (divisor * range)
 // 10000 = 19200000 / (divisor * 128) => divisor = 15.0 = 15
 	pwmSetMode(PWM_MODE_MS);              // use a fixed frequency
-	pwmSetRange(128);                     // range is 0-128
+	pwmSetRange(1024);                     // range is 0-128
 	pwmSetClock(15);                      // gives a precise 10kHz signal
 	syslog (LOG_NOTICE, "The PWM Output is enabled.");
 	return Not_Connected_00;
