@@ -72,8 +72,10 @@ struct _ECOM_Response {
 };
 
 const uint8_t ECOM_request[] = {'$', '0', 'A', '0', '5', '0', '4', '5', 'E', 0x0D }; /* Read CO value */
-const long MAX_SERIAL_TIMEOUTS = 100L;
+const long MAX_SERIAL_TIMEOUTS = 10L;
 const long MAX_CONNECT_FAIL = 10L;
+const long MAX_CHECKSUM_ERRORS = 10L;
+const int PWM_RANGE = 1024;
 
 int input_sz;
 int i_r;
@@ -94,16 +96,15 @@ fd_set except_fds;
 long write_timeout_counter = 0L;
 long read_timeout_counter = 0L;
 long not_connected_counter = 0L;
+long checksum_error_counter = 0L;
 void * p_v;
 
-typedef union _ecom_data ecom_data;
-
-union _ecom_data {
+union ECOM_Data {
 	ECOM_CO_response ecom_response;
 	uint8_t ecom_buf[255];
 };
 
-ecom_data ECOM_Data;
+union ECOM_Data ecom_data;
 
 /* Define state values */
 enum State_Values {
@@ -142,7 +143,7 @@ STATE_DESCRIPTOR const sd_descriptors[] = {
 };
 
 
-
+bool is_checksum_ok(union ECOM_Data * ed,int count);
 
 
 static void skeleton_daemon()
@@ -252,7 +253,7 @@ enum State_Values Entry_state_fn(int * serialfd)
 // PWM frequency = 19.2 MHz / (divisor * range)
 // 10000 = 19200000 / (divisor * 128) => divisor = 15.0 = 15
 	pwmSetMode(PWM_MODE_MS);              // use a fixed frequency
-	pwmSetRange(1024);                     // range is 0-128
+	pwmSetRange(PWM_RANGE);                     // set PWM range
 	pwmSetClock(15);                      // gives a precise 10kHz signal
 	syslog (LOG_NOTICE, "The PWM Output is enabled.");
 	return Not_Connected_00;
@@ -284,8 +285,8 @@ enum State_Values Not_Connected_00_state_fn(int * serialfd)
 	tcgetattr(*serialfd,&oldtio); /* save current port settings */
 	/* set new port settings for non-canonical input processing */
 	newtio = oldtio;
+	cfmakeraw(&newtio);
 	i_r = cfsetispeed(&newtio, BAUDRATE);
-	newtio.c_lflag &= ~(ICANON|ECHO); /* Clear ICANON and ECHO. */
 	newtio.c_cc[VMIN] = 1;
 	newtio.c_cc[VTIME] = 0;
 
@@ -318,8 +319,8 @@ enum State_Values Not_Connected_01_state_fn(int * serialfd)
 	tcgetattr(*serialfd,&oldtio); /* save current port settings */
 	/* set new port settings for non-canonical input processing */
 	newtio = oldtio;
+	cfmakeraw(&newtio);
 	i_r = cfsetispeed(&newtio, BAUDRATE);
-	newtio.c_lflag &= ~(ICANON|ECHO); /* Clear ICANON and ECHO. */
 	newtio.c_cc[VMIN] = 1;
 	newtio.c_cc[VTIME] = 0;
 
@@ -361,6 +362,7 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 	int i_len;
 	void * p_v;
 
+	i_r = usleep(3000000L);
 	FD_SET(*serialfd, &read_fds);
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 1000000L;
@@ -391,7 +393,7 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 	if ((i_r = select((*serialfd) + 1, &read_fds,NULL, NULL, &timeout)) == 1)
 	{
 		// fd is ready for reading
-		input_sz = read(*serialfd,ECOM_Data.ecom_buf,sizeof(buf));
+		input_sz = read(*serialfd,ecom_data.ecom_buf,sizeof(ecom_data.ecom_buf));
 		i_r = gettimeofday(&tv_now,NULL);
 		useconds_now = (tv_now.tv_sec*1000000L)+tv_now.tv_usec;
 		b_timed_out = FALSE;
@@ -400,25 +402,45 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 	{
 		// timeout or error
 		++read_timeout_counter;
-		syslog (LOG_INFO,"Read timeout %d.",read_timeout_counter);
 		i_r = gettimeofday(&tv_now,NULL);
 		b_timed_out = TRUE;
 		if (MAX_SERIAL_TIMEOUTS < read_timeout_counter)
 		{
+			syslog (LOG_INFO,"Maximum read timeouts exceeded, restarting.");
 			return System_Reset_State;
 		}
 		return Writing_Reading_State;
 	}
 	FD_SET(*serialfd, &read_fds);
+	if (!is_checksum_ok(&ecom_data,input_sz))
+	{
+		++checksum_error_counter;
+		syslog (LOG_INFO,"Checksum error: %ld",checksum_error_counter);
+		if (MAX_CHECKSUM_ERRORS < checksum_error_counter)
+		{
+			syslog (LOG_INFO,"Maximum checksum errors exceeded, restarting.");
+			return System_Reset_State;
+		}
+		return Writing_Reading_State;
+	}
 
-	i_r = usleep(3000000L);
 	return Update_PWM_State;
 }
 
 enum State_Values Update_PWM_State_state_fn(int * serialfd)
 {
-	pwmWrite(PWM0, 64);                   // duty cycle of 25% (32/128)
-	pwmWrite(PWM1, 64);                   // duty cycle of 50% (64/128)
+	int i_r;
+	uint16_t CO_value = 0;
+	char cccv[5];
+	i_r = sprintf(cccv, "%c%c%c%c",
+		ecom_data.ecom_response.data_04,
+		ecom_data.ecom_response.data_03,
+		ecom_data.ecom_response.data_02,
+		ecom_data.ecom_response.data_01);
+	CO_value = (uint16_t)strtol(cccv, NULL, 16);
+	pwmWrite(PWM0, CO_value);                   // duty cycle of 25% (32/128)
+	pwmWrite(PWM1, CO_value);                   // duty cycle of 50% (64/128)
+/*	syslog (LOG_INFO,"CO PWM value: %d",CO_value); */
 	return Writing_Reading_State;
 }
 
@@ -437,3 +459,30 @@ func_ptr lookup_state_fn(enum State_Values sv)
 	}
 	return NULL;
 }
+
+
+bool is_checksum_ok(union ECOM_Data * ed,int count)
+{
+	char ccsum[3];
+	char scsum[3];
+	bool b_r = FALSE;
+	uint8_t sum;
+	int i_x;
+	int i_r;
+	for (i_x = 0,sum = 0;(i_x < sizeof(ECOM_CO_response)-3) && (i_x < count);i_x++)
+	{
+		sum += ed->ecom_buf[i_x];
+	}
+	i_r = snprintf(ccsum,sizeof(ccsum),"%02X",sum);
+	for (i_x = 0;i_x < sizeof(ccsum);i_x++)
+	{
+		ccsum[i_x] = toupper(ccsum[i_x]);
+	}
+	i_r = snprintf(scsum,sizeof(scsum),"%c%c",ed->ecom_response.checksum_hi_byte,ed->ecom_response.checksum_lo_byte);
+	for (i_x = 0;i_x < sizeof(scsum);i_x++)
+	{
+		scsum[i_x] = toupper(scsum[i_x]);
+	}
+	return !strncmp(ccsum,scsum,(size_t)3);
+}
+
