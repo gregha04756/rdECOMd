@@ -375,6 +375,7 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 		i_r = gettimeofday(&tv_now,NULL);
 		useconds_now = (tv_now.tv_sec*1000000L)+tv_now.tv_usec;
 		b_timed_out = FALSE;
+		write_timeout_counter = 0;
 	}
 	else
 	{
@@ -397,6 +398,7 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 		i_r = gettimeofday(&tv_now,NULL);
 		useconds_now = (tv_now.tv_sec*1000000L)+tv_now.tv_usec;
 		b_timed_out = FALSE;
+		read_timeout_counter = 0;
 	}
 	else
 	{
@@ -412,15 +414,14 @@ enum State_Values Writing_Reading_State_state_fn(int * serialfd)
 		return Writing_Reading_State;
 	}
 	FD_SET(*serialfd, &read_fds);
+	checksum_error_counter = is_checksum_ok(&ecom_data,input_sz) ? 0 : ++checksum_error_counter;
+	if (MAX_CHECKSUM_ERRORS < checksum_error_counter)
+	{
+		syslog (LOG_INFO,"Maximum checksum errors exceeded, restarting.");
+		return System_Reset_State;
+	}
 	if (!is_checksum_ok(&ecom_data,input_sz))
 	{
-		++checksum_error_counter;
-		syslog (LOG_INFO,"Checksum error: %ld",checksum_error_counter);
-		if (MAX_CHECKSUM_ERRORS < checksum_error_counter)
-		{
-			syslog (LOG_INFO,"Maximum checksum errors exceeded, restarting.");
-			return System_Reset_State;
-		}
 		return Writing_Reading_State;
 	}
 
