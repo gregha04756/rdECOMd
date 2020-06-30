@@ -249,9 +249,9 @@ enum State_Values Entry_state_fn(int * serialfd)
 	pinMode(PWM0, PWM_OUTPUT);            // use the RPi PWM output
 	pinMode(PWM1, PWM_OUTPUT);            // only on recent RPis
 
-// Setting PWM frequency to be 10kHz with a full range of 128 steps
+// Setting PWM frequency to be 1250Hz with a full range of 1024 steps
 // PWM frequency = 19.2 MHz / (divisor * range)
-// 10000 = 19200000 / (divisor * 128) => divisor = 15.0 = 15
+// 1250 = 19200000 / (divisor * 1024) => divisor = 15.0 = 15
 	pwmSetMode(PWM_MODE_MS);              // use a fixed frequency
 	pwmSetRange(PWM_RANGE);                     // set PWM range
 	pwmSetClock(15);                      // gives a precise 10kHz signal
