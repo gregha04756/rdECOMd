@@ -49,6 +49,7 @@
 
 #define PWM0       12                    // this is physical pin 12
 #define PWM1       33                    // only on the RPi B+/A+/2
+#define LED0       11                    // this is physical pin 11
 
 typedef struct _ECOM_Response ECOM_CO_response;
 
@@ -82,6 +83,7 @@ int i_r;
 int serialfd;
 int c;
 int i_e;
+int heartbeat = LOW;
 struct termios oldtio;
 struct termios newtio;
 struct timeval tv_now;
@@ -248,6 +250,7 @@ enum State_Values Entry_state_fn(int * serialfd)
 	wiringPiSetupPhys();                  // use the physical pin numbers
 	pinMode(PWM0, PWM_OUTPUT);            // use the RPi PWM output
 	pinMode(PWM1, PWM_OUTPUT);            // only on recent RPis
+	pinMode(LED0, OUTPUT);            // use the RPi GPIO17 (wiringPi pin 0)
 
 // Setting PWM frequency to be 1250Hz with a full range of 1024 steps
 // PWM frequency = 19.2 MHz / (divisor * range)
@@ -441,7 +444,7 @@ enum State_Values Update_PWM_State_state_fn(int * serialfd)
 	CO_value = (uint16_t)strtol(cccv, NULL, 16);
 	pwmWrite(PWM0, CO_value);                   // duty cycle of 25% (32/128)
 	pwmWrite(PWM1, CO_value);                   // duty cycle of 50% (64/128)
-/*	syslog (LOG_INFO,"CO PWM value: %d",CO_value); */
+	digitalWrite(LED0,heartbeat = (heartbeat == LOW) ? HIGH : LOW);
 	return Writing_Reading_State;
 }
 
