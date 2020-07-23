@@ -3,7 +3,7 @@
  Name        : rdECOMd.c
  Author      : Greg
  Version     :
- Copyright   : (c) 2020 NTI BOilers Inc.
+ Copyright   : (c) 2020 NTI Boilers Inc.
  Description : daemon reads CO value from ECOM combustion analyzer
  ============================================================================
  */
