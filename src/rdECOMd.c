@@ -77,6 +77,7 @@ const long MAX_SERIAL_TIMEOUTS = 10L;
 const long MAX_CONNECT_FAIL = 10L;
 const long MAX_CHECKSUM_ERRORS = 10L;
 const int PWM_RANGE = 1024;
+const uint16_t DUTY_CYCLE_4mA = 210;
 
 int input_sz;
 int i_r;
@@ -435,6 +436,7 @@ enum State_Values Update_PWM_State_state_fn(int * serialfd)
 {
 	int i_r;
 	uint16_t CO_value = 0;
+	uint16_t duty_cycle = 0;
 	char cccv[5];
 	i_r = sprintf(cccv, "%c%c%c%c",
 		ecom_data.ecom_response.data_04,
@@ -442,8 +444,9 @@ enum State_Values Update_PWM_State_state_fn(int * serialfd)
 		ecom_data.ecom_response.data_02,
 		ecom_data.ecom_response.data_01);
 	CO_value = (uint16_t)strtol(cccv, NULL, 16);
-	pwmWrite(PWM0, CO_value);                   // duty cycle of 25% (32/128)
-	pwmWrite(PWM1, CO_value);                   // duty cycle of 50% (64/128)
+	duty_cycle = ((CO_value + DUTY_CYCLE_4mA) < PWM_RANGE) ? (CO_value + DUTY_CYCLE_4mA) : PWM_RANGE;
+	pwmWrite(PWM0, duty_cycle);                   // duty cycle of 25% (32/128)
+	pwmWrite(PWM1, duty_cycle);                   // duty cycle of 50% (64/128)
 	digitalWrite(LED0,heartbeat = (heartbeat == LOW) ? HIGH : LOW);
 	return Writing_Reading_State;
 }
